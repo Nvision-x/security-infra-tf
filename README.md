@@ -64,6 +64,7 @@ module "security_baseline" {
 | enable_cloudtrail | Enable CloudTrail with multi-region trail | `bool` | `true` | no |
 | cloudtrail_name | Name of the CloudTrail trail | `string` | `"security-trail"` | no |
 | cloudtrail_existing_bucket_name | Name of existing S3 bucket for CloudTrail. If empty, creates new bucket | `string` | `""` | no |
+| cloudtrail_existing_access_logs_bucket_name | Name of existing S3 bucket for access logs. If empty, creates new bucket | `string` | `""` | no |
 | cloudtrail_s3_key_prefix | S3 key prefix for CloudTrail logs | `string` | `"cloudtrail"` | no |
 | enable_security_contact | Enable security contact configuration | `bool` | `true` | no |
 | security_contact_name | Full name of the security contact | `string` | `""` | no |
@@ -116,7 +117,8 @@ The module creates the following S3 buckets:
 - If created: Versioning, encryption, public access blocked, SSL-only, access logging enabled
 
 ### CloudTrail Access Logs Bucket (S3.9)
-- Always created: `nvisionx-cloudtrail-access-logs-{account_id}`
+- **Option 1**: Use existing bucket by setting `cloudtrail_existing_access_logs_bucket_name`
+- **Option 2**: Auto-create bucket named `nvisionx-cloudtrail-access-logs-{account_id}`
 - Stores access logs for the CloudTrail bucket
 - Required for Security Hub S3.9 compliance
 

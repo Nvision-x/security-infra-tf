@@ -350,14 +350,16 @@ resource "aws_accessanalyzer_analyzer" "this" {
 ################################################################################
 
 locals {
-  # Determine if we need to create a new CloudTrail bucket or use existing
-  create_cloudtrail_bucket = var.enable_cloudtrail && var.cloudtrail_existing_bucket_name == ""
-  cloudtrail_bucket_name   = var.cloudtrail_existing_bucket_name != "" ? var.cloudtrail_existing_bucket_name : (local.create_cloudtrail_bucket ? aws_s3_bucket.cloudtrail[0].id : "")
+  # Determine if we need to create new buckets or use existing
+  create_cloudtrail_bucket             = var.enable_cloudtrail && var.cloudtrail_existing_bucket_name == ""
+  create_cloudtrail_access_logs_bucket = var.enable_cloudtrail && var.cloudtrail_existing_access_logs_bucket_name == ""
+  cloudtrail_bucket_name               = var.cloudtrail_existing_bucket_name != "" ? var.cloudtrail_existing_bucket_name : (local.create_cloudtrail_bucket ? aws_s3_bucket.cloudtrail[0].id : "")
+  cloudtrail_access_logs_bucket_name   = var.cloudtrail_existing_access_logs_bucket_name != "" ? var.cloudtrail_existing_access_logs_bucket_name : (local.create_cloudtrail_access_logs_bucket ? aws_s3_bucket.cloudtrail_access_logs[0].id : "")
 }
 
-# S3 Bucket for CloudTrail Access Logs
+# S3 Bucket for CloudTrail Access Logs (only if not using existing bucket)
 resource "aws_s3_bucket" "cloudtrail_access_logs" {
-  count = var.enable_cloudtrail ? 1 : 0
+  count = local.create_cloudtrail_access_logs_bucket ? 1 : 0
 
   bucket = "nvisionx-cloudtrail-access-logs-${data.aws_caller_identity.current.account_id}"
 
@@ -365,7 +367,7 @@ resource "aws_s3_bucket" "cloudtrail_access_logs" {
 }
 
 resource "aws_s3_bucket_versioning" "cloudtrail_access_logs" {
-  count = var.enable_cloudtrail ? 1 : 0
+  count = local.create_cloudtrail_access_logs_bucket ? 1 : 0
 
   bucket = aws_s3_bucket.cloudtrail_access_logs[0].id
   versioning_configuration {
@@ -374,7 +376,7 @@ resource "aws_s3_bucket_versioning" "cloudtrail_access_logs" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail_access_logs" {
-  count = var.enable_cloudtrail ? 1 : 0
+  count = local.create_cloudtrail_access_logs_bucket ? 1 : 0
 
   bucket = aws_s3_bucket.cloudtrail_access_logs[0].id
 
@@ -386,7 +388,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail_access
 }
 
 resource "aws_s3_bucket_public_access_block" "cloudtrail_access_logs" {
-  count = var.enable_cloudtrail ? 1 : 0
+  count = local.create_cloudtrail_access_logs_bucket ? 1 : 0
 
   bucket = aws_s3_bucket.cloudtrail_access_logs[0].id
 
@@ -397,7 +399,7 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail_access_logs" {
 }
 
 resource "aws_s3_bucket_policy" "cloudtrail_access_logs" {
-  count = var.enable_cloudtrail ? 1 : 0
+  count = local.create_cloudtrail_access_logs_bucket ? 1 : 0
 
   bucket = aws_s3_bucket.cloudtrail_access_logs[0].id
   policy = jsonencode({
@@ -487,7 +489,7 @@ resource "aws_s3_bucket_logging" "cloudtrail" {
 
   bucket = aws_s3_bucket.cloudtrail[0].id
 
-  target_bucket = aws_s3_bucket.cloudtrail_access_logs[0].id
+  target_bucket = local.cloudtrail_access_logs_bucket_name
   target_prefix = "cloudtrail-bucket-logs/"
 
   depends_on = [aws_s3_bucket_policy.cloudtrail_access_logs]

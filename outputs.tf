@@ -118,10 +118,10 @@ output "cloudtrail_s3_bucket_arn" {
 
 output "cloudtrail_access_logs_bucket_name" {
   description = "Name of the S3 bucket for CloudTrail access logs"
-  value       = var.enable_cloudtrail ? aws_s3_bucket.cloudtrail_access_logs[0].id : null
+  value       = var.enable_cloudtrail ? local.cloudtrail_access_logs_bucket_name : null
 }
 
 output "cloudtrail_access_logs_bucket_arn" {
-  description = "ARN of the S3 bucket for CloudTrail access logs"
-  value       = var.enable_cloudtrail ? aws_s3_bucket.cloudtrail_access_logs[0].arn : null
+  description = "ARN of the S3 bucket for CloudTrail access logs (only if created by this module)"
+  value       = local.create_cloudtrail_access_logs_bucket ? aws_s3_bucket.cloudtrail_access_logs[0].arn : null
 }

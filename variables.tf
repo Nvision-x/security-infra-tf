@@ -253,6 +253,12 @@ variable "cloudtrail_existing_bucket_name" {
   default     = ""
 }
 
+variable "cloudtrail_existing_access_logs_bucket_name" {
+  description = "Name of an existing S3 bucket for CloudTrail access logs. If empty, creates a new bucket"
+  type        = string
+  default     = ""
+}
+
 variable "cloudtrail_s3_key_prefix" {
   description = "S3 key prefix for CloudTrail logs"
   type        = string
