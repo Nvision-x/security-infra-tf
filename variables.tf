@@ -90,6 +90,16 @@ variable "enable_security_contact" {
   default     = true
 }
 
+################################################################################
+# S3.1 - Account-level S3 Block Public Access
+################################################################################
+
+variable "enable_s3_account_public_access_block" {
+  description = "Enable account-level S3 Block Public Access settings"
+  type        = bool
+  default     = true
+}
+
 variable "security_contact_name" {
   description = "Full name of the security contact"
   type        = string
