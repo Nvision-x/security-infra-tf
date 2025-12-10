@@ -264,3 +264,20 @@ variable "cloudtrail_s3_key_prefix" {
   type        = string
   default     = "cloudtrail"
 }
+
+variable "cloudtrail_kms_key_arn" {
+  description = "ARN of an existing KMS key for CloudTrail encryption. If empty, creates a new KMS key"
+  type        = string
+  default     = ""
+}
+
+variable "cloudtrail_kms_key_deletion_window" {
+  description = "Waiting period in days before KMS key deletion (7-30)"
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.cloudtrail_kms_key_deletion_window >= 7 && var.cloudtrail_kms_key_deletion_window <= 30
+    error_message = "KMS key deletion window must be between 7 and 30 days."
+  }
+}

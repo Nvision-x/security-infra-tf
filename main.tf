@@ -552,6 +552,72 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
   depends_on = [aws_s3_bucket_public_access_block.cloudtrail]
 }
 
+# KMS Key for CloudTrail encryption (CloudTrail.2)
+resource "aws_kms_key" "cloudtrail" {
+  count = var.enable_cloudtrail && var.cloudtrail_kms_key_arn == "" ? 1 : 0
+
+  description             = "KMS key for CloudTrail encryption"
+  deletion_window_in_days = var.cloudtrail_kms_key_deletion_window
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EnableRootAccountPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowCloudTrailToEncryptLogs"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.cloudtrail_name}"
+          }
+          StringLike = {
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
+          }
+        }
+      },
+      {
+        Sid    = "AllowCloudTrailToDescribeKey"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "kms:DescribeKey"
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_kms_alias" "cloudtrail" {
+  count = var.enable_cloudtrail && var.cloudtrail_kms_key_arn == "" ? 1 : 0
+
+  name          = "alias/cloudtrail-${var.cloudtrail_name}"
+  target_key_id = aws_kms_key.cloudtrail[0].key_id
+}
+
+locals {
+  cloudtrail_kms_key_arn = var.cloudtrail_kms_key_arn != "" ? var.cloudtrail_kms_key_arn : (var.enable_cloudtrail ? aws_kms_key.cloudtrail[0].arn : "")
+}
+
 # CloudTrail
 resource "aws_cloudtrail" "this" {
   count = var.enable_cloudtrail ? 1 : 0
@@ -559,6 +625,7 @@ resource "aws_cloudtrail" "this" {
   name                          = var.cloudtrail_name
   s3_bucket_name                = local.cloudtrail_bucket_name
   s3_key_prefix                 = var.cloudtrail_s3_key_prefix
+  kms_key_id                    = local.cloudtrail_kms_key_arn
   include_global_service_events = true
   is_multi_region_trail         = true
   enable_log_file_validation    = true

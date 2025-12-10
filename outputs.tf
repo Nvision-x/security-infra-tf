@@ -125,3 +125,13 @@ output "cloudtrail_access_logs_bucket_arn" {
   description = "ARN of the S3 bucket for CloudTrail access logs (only if created by this module)"
   value       = local.create_cloudtrail_access_logs_bucket ? aws_s3_bucket.cloudtrail_access_logs[0].arn : null
 }
+
+output "cloudtrail_kms_key_arn" {
+  description = "ARN of the KMS key used for CloudTrail encryption"
+  value       = var.enable_cloudtrail ? local.cloudtrail_kms_key_arn : null
+}
+
+output "cloudtrail_kms_key_id" {
+  description = "ID of the KMS key used for CloudTrail encryption (only if created by this module)"
+  value       = var.enable_cloudtrail && var.cloudtrail_kms_key_arn == "" ? aws_kms_key.cloudtrail[0].key_id : null
+}
