@@ -1,0 +1,27 @@
+# Security Contact (Account.1)
+security_contact_name  = "Security Team"
+security_contact_title = "Security Operations Center"
+security_contact_email = "security@example.com"
+security_contact_phone = "+1-555-555-5555"
+
+# Support Role (IAM.18)
+support_role_trusted_principals = [
+  "arn:aws:iam::123456789012:root"
+]
+support_role_require_mfa = true
+
+# Password Policy (IAM.15, IAM.16)
+password_minimum_length   = 14
+password_reuse_prevention = 24
+
+# Access Analyzer (IAM.28)
+access_analyzer_name = "account-analyzer"
+
+# Optional: Custom S3 bucket name for AWS Config
+# config_s3_bucket_name = "my-custom-config-bucket"
+
+# Tags
+tags = {
+  Environment = "production"
+  ManagedBy   = "terraform"
+}
