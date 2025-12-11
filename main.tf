@@ -29,6 +29,8 @@ resource "aws_securityhub_account" "this" {
   count = var.enable_security_hub ? 1 : 0
 
   enable_default_standards = false
+
+  depends_on = [aws_config_configuration_recorder_status.this]
 }
 
 resource "aws_securityhub_standards_subscription" "cis_v5" {
