@@ -74,11 +74,6 @@ variable "config_snapshot_frequency" {
   }
 }
 
-variable "config_iam_role_name" {
-  description = "Name of the IAM role for AWS Config"
-  type        = string
-  default     = "aws-config-role"
-}
 
 ################################################################################
 # Account.1 - Security Contact Variables

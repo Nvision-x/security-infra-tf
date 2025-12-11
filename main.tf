@@ -157,11 +157,19 @@ resource "aws_s3_bucket_policy" "config" {
   depends_on = [aws_s3_bucket_public_access_block.config]
 }
 
+# Service-linked role for AWS Config (required for Config.1 compliance)
+resource "aws_iam_service_linked_role" "config" {
+  count = var.enable_aws_config ? 1 : 0
+
+  aws_service_name = "config.amazonaws.com"
+  description      = "Service-linked role for AWS Config"
+}
+
 resource "aws_config_configuration_recorder" "this" {
   count = var.enable_aws_config ? 1 : 0
 
   name     = var.config_recorder_name
-  role_arn = aws_iam_role.config[0].arn
+  role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
 
   recording_group {
     all_supported = true
@@ -174,6 +182,8 @@ resource "aws_config_configuration_recorder" "this" {
   recording_mode {
     recording_frequency = var.config_recording_frequency
   }
+
+  depends_on = [aws_iam_service_linked_role.config]
 }
 
 resource "aws_config_delivery_channel" "this" {
@@ -202,65 +212,6 @@ resource "aws_config_configuration_recorder_status" "this" {
   depends_on = [aws_config_delivery_channel.this]
 }
 
-# IAM Role for AWS Config
-resource "aws_iam_role" "config" {
-  count = var.enable_aws_config ? 1 : 0
-
-  name = var.config_iam_role_name
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "config.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = var.tags
-}
-
-resource "aws_iam_role_policy_attachment" "config" {
-  count = var.enable_aws_config ? 1 : 0
-
-  role       = aws_iam_role.config[0].name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
-}
-
-resource "aws_iam_role_policy" "config_s3" {
-  count = var.enable_aws_config ? 1 : 0
-
-  name = "config-s3-delivery"
-  role = aws_iam_role.config[0].id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:PutObjectAcl"
-        ]
-        Resource = "${aws_s3_bucket.config[0].arn}/${var.config_s3_key_prefix}/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
-      },
-      {
-        Effect   = "Allow"
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.config[0].arn
-      }
-    ]
-  })
-}
 
 ################################################################################
 # Account.1 - Security Contact Information

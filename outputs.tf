@@ -32,8 +32,8 @@ output "config_recorder_id" {
 }
 
 output "config_role_arn" {
-  description = "ARN of the IAM role used by AWS Config"
-  value       = var.enable_aws_config ? aws_iam_role.config[0].arn : null
+  description = "ARN of the service-linked role used by AWS Config"
+  value       = var.enable_aws_config ? "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig" : null
 }
 
 ################################################################################
