@@ -29,6 +29,8 @@ resource "aws_securityhub_account" "this" {
   count = var.enable_security_hub ? 1 : 0
 
   enable_default_standards = false
+
+  depends_on = [aws_config_configuration_recorder_status.this]
 }
 
 resource "aws_securityhub_standards_subscription" "cis_v5" {
@@ -155,11 +157,19 @@ resource "aws_s3_bucket_policy" "config" {
   depends_on = [aws_s3_bucket_public_access_block.config]
 }
 
+# Service-linked role for AWS Config (required for Config.1 compliance)
+resource "aws_iam_service_linked_role" "config" {
+  count = var.enable_aws_config ? 1 : 0
+
+  aws_service_name = "config.amazonaws.com"
+  description      = "Service-linked role for AWS Config"
+}
+
 resource "aws_config_configuration_recorder" "this" {
   count = var.enable_aws_config ? 1 : 0
 
   name     = var.config_recorder_name
-  role_arn = aws_iam_role.config[0].arn
+  role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
 
   recording_group {
     all_supported = true
@@ -172,6 +182,8 @@ resource "aws_config_configuration_recorder" "this" {
   recording_mode {
     recording_frequency = var.config_recording_frequency
   }
+
+  depends_on = [aws_iam_service_linked_role.config]
 }
 
 resource "aws_config_delivery_channel" "this" {
@@ -200,65 +212,6 @@ resource "aws_config_configuration_recorder_status" "this" {
   depends_on = [aws_config_delivery_channel.this]
 }
 
-# IAM Role for AWS Config
-resource "aws_iam_role" "config" {
-  count = var.enable_aws_config ? 1 : 0
-
-  name = var.config_iam_role_name
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "config.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = var.tags
-}
-
-resource "aws_iam_role_policy_attachment" "config" {
-  count = var.enable_aws_config ? 1 : 0
-
-  role       = aws_iam_role.config[0].name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
-}
-
-resource "aws_iam_role_policy" "config_s3" {
-  count = var.enable_aws_config ? 1 : 0
-
-  name = "config-s3-delivery"
-  role = aws_iam_role.config[0].id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:PutObjectAcl"
-        ]
-        Resource = "${aws_s3_bucket.config[0].arn}/${var.config_s3_key_prefix}/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
-      },
-      {
-        Effect   = "Allow"
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.config[0].arn
-      }
-    ]
-  })
-}
 
 ################################################################################
 # Account.1 - Security Contact Information
@@ -272,6 +225,19 @@ resource "aws_account_alternate_contact" "security" {
   title                  = var.security_contact_title
   email_address          = var.security_contact_email
   phone_number           = var.security_contact_phone
+}
+
+################################################################################
+# S3.1 - Account-level S3 Block Public Access
+################################################################################
+
+resource "aws_s3_account_public_access_block" "this" {
+  count = var.enable_s3_account_public_access_block ? 1 : 0
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 ################################################################################
@@ -350,14 +316,16 @@ resource "aws_accessanalyzer_analyzer" "this" {
 ################################################################################
 
 locals {
-  # Determine if we need to create a new CloudTrail bucket or use existing
-  create_cloudtrail_bucket = var.enable_cloudtrail && var.cloudtrail_existing_bucket_name == ""
-  cloudtrail_bucket_name   = var.cloudtrail_existing_bucket_name != "" ? var.cloudtrail_existing_bucket_name : (local.create_cloudtrail_bucket ? aws_s3_bucket.cloudtrail[0].id : "")
+  # Determine if we need to create new buckets or use existing
+  create_cloudtrail_bucket             = var.enable_cloudtrail && var.cloudtrail_existing_bucket_name == ""
+  create_cloudtrail_access_logs_bucket = var.enable_cloudtrail && var.cloudtrail_existing_access_logs_bucket_name == ""
+  cloudtrail_bucket_name               = var.cloudtrail_existing_bucket_name != "" ? var.cloudtrail_existing_bucket_name : (local.create_cloudtrail_bucket ? aws_s3_bucket.cloudtrail[0].id : "")
+  cloudtrail_access_logs_bucket_name   = var.cloudtrail_existing_access_logs_bucket_name != "" ? var.cloudtrail_existing_access_logs_bucket_name : (local.create_cloudtrail_access_logs_bucket ? aws_s3_bucket.cloudtrail_access_logs[0].id : "")
 }
 
-# S3 Bucket for CloudTrail Access Logs
+# S3 Bucket for CloudTrail Access Logs (only if not using existing bucket)
 resource "aws_s3_bucket" "cloudtrail_access_logs" {
-  count = var.enable_cloudtrail ? 1 : 0
+  count = local.create_cloudtrail_access_logs_bucket ? 1 : 0
 
   bucket = "nvisionx-cloudtrail-access-logs-${data.aws_caller_identity.current.account_id}"
 
@@ -365,7 +333,7 @@ resource "aws_s3_bucket" "cloudtrail_access_logs" {
 }
 
 resource "aws_s3_bucket_versioning" "cloudtrail_access_logs" {
-  count = var.enable_cloudtrail ? 1 : 0
+  count = local.create_cloudtrail_access_logs_bucket ? 1 : 0
 
   bucket = aws_s3_bucket.cloudtrail_access_logs[0].id
   versioning_configuration {
@@ -374,7 +342,7 @@ resource "aws_s3_bucket_versioning" "cloudtrail_access_logs" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail_access_logs" {
-  count = var.enable_cloudtrail ? 1 : 0
+  count = local.create_cloudtrail_access_logs_bucket ? 1 : 0
 
   bucket = aws_s3_bucket.cloudtrail_access_logs[0].id
 
@@ -386,7 +354,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail_access
 }
 
 resource "aws_s3_bucket_public_access_block" "cloudtrail_access_logs" {
-  count = var.enable_cloudtrail ? 1 : 0
+  count = local.create_cloudtrail_access_logs_bucket ? 1 : 0
 
   bucket = aws_s3_bucket.cloudtrail_access_logs[0].id
 
@@ -397,7 +365,7 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail_access_logs" {
 }
 
 resource "aws_s3_bucket_policy" "cloudtrail_access_logs" {
-  count = var.enable_cloudtrail ? 1 : 0
+  count = local.create_cloudtrail_access_logs_bucket ? 1 : 0
 
   bucket = aws_s3_bucket.cloudtrail_access_logs[0].id
   policy = jsonencode({
@@ -487,7 +455,7 @@ resource "aws_s3_bucket_logging" "cloudtrail" {
 
   bucket = aws_s3_bucket.cloudtrail[0].id
 
-  target_bucket = aws_s3_bucket.cloudtrail_access_logs[0].id
+  target_bucket = local.cloudtrail_access_logs_bucket_name
   target_prefix = "cloudtrail-bucket-logs/"
 
   depends_on = [aws_s3_bucket_policy.cloudtrail_access_logs]
@@ -550,6 +518,72 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
   depends_on = [aws_s3_bucket_public_access_block.cloudtrail]
 }
 
+# KMS Key for CloudTrail encryption (CloudTrail.2)
+resource "aws_kms_key" "cloudtrail" {
+  count = var.enable_cloudtrail && var.cloudtrail_kms_key_arn == "" ? 1 : 0
+
+  description             = "KMS key for CloudTrail encryption"
+  deletion_window_in_days = var.cloudtrail_kms_key_deletion_window
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EnableRootAccountPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowCloudTrailToEncryptLogs"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.cloudtrail_name}"
+          }
+          StringLike = {
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
+          }
+        }
+      },
+      {
+        Sid    = "AllowCloudTrailToDescribeKey"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "kms:DescribeKey"
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_kms_alias" "cloudtrail" {
+  count = var.enable_cloudtrail && var.cloudtrail_kms_key_arn == "" ? 1 : 0
+
+  name          = "alias/cloudtrail-${var.cloudtrail_name}"
+  target_key_id = aws_kms_key.cloudtrail[0].key_id
+}
+
+locals {
+  cloudtrail_kms_key_arn = var.cloudtrail_kms_key_arn != "" ? var.cloudtrail_kms_key_arn : (var.enable_cloudtrail ? aws_kms_key.cloudtrail[0].arn : "")
+}
+
 # CloudTrail
 resource "aws_cloudtrail" "this" {
   count = var.enable_cloudtrail ? 1 : 0
@@ -557,6 +591,7 @@ resource "aws_cloudtrail" "this" {
   name                          = var.cloudtrail_name
   s3_bucket_name                = local.cloudtrail_bucket_name
   s3_key_prefix                 = var.cloudtrail_s3_key_prefix
+  kms_key_id                    = local.cloudtrail_kms_key_arn
   include_global_service_events = true
   is_multi_region_trail         = true
   enable_log_file_validation    = true

@@ -74,11 +74,6 @@ variable "config_snapshot_frequency" {
   }
 }
 
-variable "config_iam_role_name" {
-  description = "Name of the IAM role for AWS Config"
-  type        = string
-  default     = "aws-config-role"
-}
 
 ################################################################################
 # Account.1 - Security Contact Variables
@@ -86,6 +81,16 @@ variable "config_iam_role_name" {
 
 variable "enable_security_contact" {
   description = "Enable security contact configuration"
+  type        = bool
+  default     = true
+}
+
+################################################################################
+# S3.1 - Account-level S3 Block Public Access
+################################################################################
+
+variable "enable_s3_account_public_access_block" {
+  description = "Enable account-level S3 Block Public Access settings"
   type        = bool
   default     = true
 }
@@ -253,8 +258,31 @@ variable "cloudtrail_existing_bucket_name" {
   default     = ""
 }
 
+variable "cloudtrail_existing_access_logs_bucket_name" {
+  description = "Name of an existing S3 bucket for CloudTrail access logs. If empty, creates a new bucket"
+  type        = string
+  default     = ""
+}
+
 variable "cloudtrail_s3_key_prefix" {
   description = "S3 key prefix for CloudTrail logs"
   type        = string
   default     = "cloudtrail"
+}
+
+variable "cloudtrail_kms_key_arn" {
+  description = "ARN of an existing KMS key for CloudTrail encryption. If empty, creates a new KMS key"
+  type        = string
+  default     = ""
+}
+
+variable "cloudtrail_kms_key_deletion_window" {
+  description = "Waiting period in days before KMS key deletion (7-30)"
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.cloudtrail_kms_key_deletion_window >= 7 && var.cloudtrail_kms_key_deletion_window <= 30
+    error_message = "KMS key deletion window must be between 7 and 30 days."
+  }
 }
