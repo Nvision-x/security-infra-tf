@@ -241,9 +241,9 @@ variable "access_analyzer_name" {
 ################################################################################
 
 variable "enable_cloudtrail" {
-  description = "Enable CloudTrail with multi-region trail"
+  description = "Enable CloudTrail with multi-region trail. Defaults to false: nx-org-trail (see nx-security-org-tf) already delivers a free, multi-region, log-file-validated, KMS-encrypted copy of every management event to every member account, so a trail here is a second PAID copy of the same events."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "cloudtrail_name" {
